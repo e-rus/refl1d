@@ -113,46 +113,57 @@ def _usage():
 
 def calc_errors(problem, points):
     ''' 
-    Returns reflectivity, residuals, and z SLD profiles selected
-    from the population of a DREAM fit. Results are returned in
-    a dictionary.
-    
-    *nshown* is the number of samples to include from the state.
-    *state* is the loaded DREAM state.
-    *random* is True if the samples are randomly selected, or False if
-    the most recent samples should be used.  Use random if you have
-    poor mixing (i.e., the parameters tend to stay fixed from generation
-    to generation), but not random if your burn-in was too short, and
-    you want to select from the end.
+    Returns reflectivity, residuals, and z SLD profiles for an array of
+    pvecs. Results are returned in a dictionary, with the model name as a key.
+    Each entry in this dictionary has the sub entries, each of which is an
+    array of arrays for each of the points entered above:
+        refls: the fitted
+        zpros: the z profiles
+        resds: the residuals
     '''
+    # Grab the individual samples
+    if hasattr(problem, 'models'):
+        models = [m.fitness for m in problem.models]
+    else:
+        models = [problem.fitness]
+
+##    experiments = []
+##    for m in models:
+##        if hasattr(m, 'parts'):
+##            experiments.extend(m.parts)
+##        else:
+##            experiments.append(m)
+##
+##    def residQ(m):
+##        if m.probe.polarized:
+##            return np.hstack([xs.Q for xs in m.probe.xs if xs is not None])
+##        else:
+##            return m.probe.Q
+##    Q = dict((m, residQ(m)) for m in experiments)
+
+    
+    refls,resds,zpros=[dict([(m.name,[]) for m in models]) for i in range(3)] 
+    def record_point():
+        problem.chisq() # Force reflectivity recalculation
+        for m in models:
+            name = m.name
+            refls[name].append(m.reflectivity())
+            resds[name].append(m.residuals())
+            if m.ismagnetic:
+                zpros[name].append(m.magnetic_profile())
+            else:
+                zpros[name].append(m.smooth_profile())
+
+    for pvec in points:
+        problem.setp(pvec)
+        record_point()
+
     sampledict={}
-    if hasattr(problem,'fitness'):
-        refls,resds,zpros = [],[],[]
-        for pvec in points:
-            problem.setp(pvec)
-            pf = problem.fitness
-            refls.append(pf.reflectivity())
-            resds.append(pf.residuals())
-            zpros.append(pf.smooth_profile())
-        sampledict.update({problem.fitness.name:
-                           {'refls':np.asarray(refls),
-                            'resds':np.asarray(resds),
-                            'zpros':np.asarray(zpros)}})
-    elif hasattr(problem,'models'):
-        refls,resds,zpros=[dict([(i.name,[]) for i in problem.models]) for i in range(3)]
-        for pvec in points:
-            problem.setp(pvec)
-            for model in problem.models:
-                pf = model.fitness
-                name = model.name
-                refls[name].append(pf.reflectivity())
-                resds[name].append(pf.residuals())
-                zpros[name].append(pf.smooth_profile())
-        for name in refls.keys():
-            entries={'refls':np.asarray(refls[name]),
-                     'resds':np.asarray(resds[name]),
-                     'zpros':np.asarray(zpros[name])}
-            sampledict.update({name:entries})
+    for name in refls.keys():
+        entries={'refls':np.asarray(refls[name]),
+                 'resds':np.asarray(resds[name]),
+                 'zpros':np.asarray(zpros[name])}
+        sampledict.update({name:entries})
     return sampledict
 
 def align_profiles(profiles, slabs, align):
