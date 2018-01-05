@@ -112,95 +112,48 @@ def _usage():
 # TODO: move run_errors somewhere more appropriate, like cli.py
 
 def calc_errors(problem, points):
-    """
-    Align the sample profiles and compute the residual difference from the
-    measured reflectivity for a set of points.
-
-    The points should be sampled from the posterior probability
-    distribution computed from MCMC, bootstrapping or sampled from
-    the error ellipse calculated at the minimum.
-
-    Each of the returned arguments is a dictionary mapping model number to
-    error sample data as follows:
-
-    Returns (profiles, slabs, Q, residuals).
-
-    *profiles*
-
-        Arrays of (z, rho, irho) for non-magnetic models or arrays
-        of (z, rho, irho, rhoM, thetaM) for magnetic models.  There
-        will be one set of arrays returned per error sample.
-
-    *slabs*
-
-        Array of slab thickness for the layers in the models.  There
-        will be one array returned per error sample.  Using slab thickness,
-        profiles can be aligned on interface boundaries and layer centers.
-
-    *Q*
-
-        Array of Q values for the data points in the model.  The data
-        points are the same for all error samples, so only one Q array
-        is needed per model.
-
-    *residuals*
-
-        Array of (theory-data)/uncertainty for each data point in
-        the measurement.  There will be one array returned per error sample.
-    """
-    # Grab the individual samples
-    if hasattr(problem, 'models'):
-        models = [m.fitness for m in problem.models]
-    else:
-        models = [problem.fitness]
-
-    experiments = []
-    for m in models:
-        if hasattr(m, 'parts'):
-            experiments.extend(m.parts)
-        else:
-            experiments.append(m)
-    #probes = []
-    #for m in experiments:
-    #    if hasattr(m.probe, 'probes'):
-    #        probes.extend(m.probe.probes)
-    #    elif hasattr(m.probe, 'xs'):
-    #        probes.extend([p for p in m.probe if p])
-    #    else:
-    #        probes.append(p)
-
-    # Find Q
-    def residQ(m):
-        if m.probe.polarized:
-            return np.hstack([xs.Q for xs in m.probe.xs if xs is not None])
-        else:
-            return m.probe.Q
-    Q = dict((m, residQ(m)) for m in experiments)
-
-    profiles = dict((m, []) for m in experiments)
-    residuals = dict((m, []) for m in experiments)
-    slabs = dict((m, []) for m in experiments)
-    def record_point():
-        problem.chisq() # Force reflectivity recalculation
-        for m in experiments:
-            D = m.residuals()
-            residuals[m].append(D+0)
-            slabs_i = [L.thickness.value for L in m.sample[1:-1]]
-            slabs[m].append(np.array(slabs_i))
-            if m.ismagnetic:
-                z, rho, irho, rhoM, thetaM = m.magnetic_profile()
-                profiles[m].append((z+0, rho+0, irho+0, rhoM+0, thetaM+0))
-            else:
-                z, rho, irho = m.smooth_profile()
-                profiles[m].append((z+0, rho+0, irho+0))
-    record_point() # Put best at slot 0, no alignment
-    for p in points:
-        problem.setp(p)
-        record_point()
-
-    # Turn residuals into arrays
-    residuals = dict((k, np.asarray(v).T) for k, v in residuals.items())
-    return profiles, slabs, Q, residuals
+    ''' 
+    Returns reflectivity, residuals, and z SLD profiles selected
+    from the population of a DREAM fit. Results are returned in
+    a dictionary.
+    
+    *nshown* is the number of samples to include from the state.
+    *state* is the loaded DREAM state.
+    *random* is True if the samples are randomly selected, or False if
+    the most recent samples should be used.  Use random if you have
+    poor mixing (i.e., the parameters tend to stay fixed from generation
+    to generation), but not random if your burn-in was too short, and
+    you want to select from the end.
+    '''
+    sampledict={}
+    if hasattr(problem,'fitness'):
+        refls,resds,zpros = [],[],[]
+        for pvec in points:
+            problem.setp(pvec)
+            pf = problem.fitness
+            refls.append(pf.reflectivity())
+            resds.append(pf.residuals())
+            zpros.append(pf.smooth_profile())
+        sampledict.update({problem.fitness.name:
+                           {'refls':np.asarray(refls),
+                            'resds':np.asarray(resds),
+                            'zpros':np.asarray(zpros)}})
+    elif hasattr(problem,'models'):
+        refls,resds,zpros=[dict([(i.name,[]) for i in problem.models]) for i in range(3)]
+        for pvec in points:
+            problem.setp(pvec)
+            for model in problem.models:
+                pf = model.fitness
+                name = model.name
+                refls[name].append(pf.reflectivity())
+                resds[name].append(pf.residuals())
+                zpros[name].append(pf.smooth_profile())
+        for name in refls.keys():
+            entries={'refls':np.asarray(refls[name]),
+                     'resds':np.asarray(resds[name]),
+                     'zpros':np.asarray(zpros[name])}
+            sampledict.update({name:entries})
+    return sampledict
 
 def align_profiles(profiles, slabs, align):
     """
