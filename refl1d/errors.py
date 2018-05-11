@@ -120,6 +120,9 @@ def calc_errors(problem, points):
         refls: the fitted
         zpros: the z profiles
         resds: the residuals
+        slabs: Array of slab thickness for the layers in the models.  There
+        will be one array returned per error sample.  Using slab thickness,
+        profiles can be aligned on interface boundaries and layer centers.
     '''
     # Grab the individual samples
     if hasattr(problem, 'models'):
@@ -142,13 +145,15 @@ def calc_errors(problem, points):
 ##    Q = dict((m, residQ(m)) for m in experiments)
 
     
-    refls,resds,zpros=[dict([(m.name,[]) for m in models]) for i in range(3)] 
+    refls,resds,zpros,slabs=[dict([(m.name,[]) for m in models]) for i in range(4)] 
     def record_point():
         problem.chisq() # Force reflectivity recalculation
         for m in models:
             name = m.name
             refls[name].append(m.reflectivity())
             resds[name].append(m.residuals())
+            slabs_i = [L.thickness.value for L in m.sample[1:-1]]
+            slabs[name].append(np.array(slabs_i))
             if m.ismagnetic:
                 zpros[name].append(m.magnetic_profile())
             else:
@@ -162,7 +167,8 @@ def calc_errors(problem, points):
     for name in refls.keys():
         entries={'refls':np.asarray(refls[name]),
                  'resds':np.asarray(resds[name]),
-                 'zpros':np.asarray(zpros[name])}
+                 'zpros':np.asarray(zpros[name]),
+                 'slabs':np.asarray(slabs[name])}
         sampledict.update({name:entries})
     return sampledict
 
@@ -222,18 +228,18 @@ def show_errors(errors, contours=_CONTOURS, npoints=200,
         if save:
             pylab.savefig(save+"-err2.png")
     else: # Multiple plots
-        profiles, slabs, Q, residuals = errors
+#        profiles, slabs, Q, residuals = errors
         fignum = 1
         for m in profiles.keys():
             pylab.figure()
-            show_profiles(errors=({m:profiles[m]}, {m:slabs[m]}, None, None),
+            show_profiles(errors=({m:errors['zpros'][m]}, {m:errors['slabs'][m]}, None, None),
                           contours=contours, npoints=npoints, align=align)
             if save:
                 pylab.savefig(save+"-err%d.png"%fignum)
             fignum += 1
         for m in residuals.keys():
             pylab.figure()
-            show_residuals(errors=(None, None, {m:Q[m]}, {m:residuals[m]}),
+            show_residuals(errors=(None, None, {m:errors['refls'][:,0][m]}, {m:errors['resds'][m]}),
                            contours=contours)
             if save:
                 pylab.savefig(save+"-err%d.png"%fignum)
