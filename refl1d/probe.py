@@ -11,6 +11,7 @@ energy of the radiation.
 See :ref:`data-guide` for details.
 
 """
+from __future__ import with_statement, division, print_function
 
 # TOF stitching introduces a lot of complexity.
 # Theta offset:
@@ -37,7 +38,6 @@ See :ref:`data-guide` for details.
 #
 # Unstitched seems like the better bet.
 
-from __future__ import with_statement, division
 import os
 import json
 
@@ -346,6 +346,14 @@ class Probe(object):
                 'theta_offset':self.theta_offset,
                }
 
+    def to_dict(self):
+        """ Return a dictionary representation of the parameters """
+        return dict(type=type(self).__name__,
+                    intensity=self.intensity.to_dict(),
+                    background=self.background.to_dict(),
+                    back_absorption=self.back_absorption.to_dict(),
+                    theta_offset=self.theta_offset.to_dict())
+
     def scattering_factors(self, material, density):
         """
         Returns the scattering factors associated with the material given
@@ -514,6 +522,7 @@ class Probe(object):
             Q, dQ = _interpolate_Q(self.Q, self.dQ, interpolation)
             Q, R = self.Q, numpy.interp(Q, calc_Q, calc_R)
         R = self.intensity.value*R + self.background.value
+        #return calc_Q, calc_R
         return Q, R
 
     def fresnel(self, substrate=None, surface=None):
@@ -648,10 +657,10 @@ class Probe(object):
         if substrate is None and surface is None:
             raise TypeError("Fresnel-normalized reflectivity needs substrate or surface")
         F = self.fresnel(substrate=substrate, surface=surface)
-        scale = lambda Q, dQ, R, dR: (
-            Q, dQ,
-            R/(F(Q)*self.intensity.value+self.background.value),
-            dR/(F(Q)*self.intensity.value+self.background.value))
+        #print("substrate", substrate, "surface", surface)
+        def scale(Q, dQ, R, dR):
+            Q, fresnel = self.apply_beam(self.calc_Q, F(self.calc_Q))
+            return Q, dQ, R/fresnel, dR/fresnel
         if substrate is None:
             name = "air:%s" % surface.name
         elif surface is None or isinstance(surface, Vacuum):
@@ -1032,6 +1041,7 @@ def load4(filename, keysep=":", sep=None, comment="#", name=None,
           theta_offset=0, sample_broadening=0,
           L=None, dL=None, T=None, dT=None,
           FWHM=False, radiation=None,
+          columns=None,
          ):
     r"""
     Load in four column data Q, R, dR, dQ.
@@ -1094,10 +1104,20 @@ def load4(filename, keysep=":", sep=None, comment="#", name=None,
     *radiation* is 'xray' or 'neutron', depending on whether X-ray or
     neutron scattering length density calculator should be used for
     determining the scattering length density of a material.
+
+    *columns* is a string giving the column order in the file.  Default
+    order is "Q R dR dQ".
     """
     data = parse_multi(filename, keysep=keysep, sep=sep, comment=comment)
+    if columns:
+        actual = columns.split()
+        natural = "Q R dR dQ".split()
+        order = [natural.index(k) for k in actual]
+    else:
+        order = [0, 1, 2, 3]
     def _as_Qprobe(data):
-        Q, R, dR, dQ = data[1]
+        Q, R, dR, dQ = (data[1][k] for k in order)
+
         if FWHM: # dQ defaults to 1-sigma, if FWHM is not True
             dQ = FWHM2sigma(dQ)
 
@@ -1323,6 +1343,13 @@ class PolarizedNeutronProbe(object):
             'Aguide': self.Aguide, 'H': self.H,
         }
 
+    def to_dict(self):
+        """ Return a dictionary representation of the parameters """
+        mm, mp, pm, pp = [(xsi.to_dict() if xsi else None)
+                          for xsi in self.xs]
+        return dict(type=type(self).__name__,
+                    pp=pp, pm=pm, mp=mp, mm=mm, a_guide=self.Aguide, h=self.H)
+
     def resynth_data(self):
         for p in self.xs:
             if p is not None:
@@ -1418,8 +1445,9 @@ class PolarizedNeutronProbe(object):
                                                wavelength=self.unique_L,
                                                density=density)
         # TODO: support wavelength dependent systems
+        #print("sf", str(material), type(rho), type(irho[0]))
         return rho, irho[0], rho_incoh
-        return rho, irho[self._L_idx], rho_incoh
+        #return rho, irho[self._L_idx], rho_incoh
     scattering_factors.__doc__ = Probe.scattering_factors.__doc__
 
     def select_corresponding(self, theory):
@@ -1504,7 +1532,7 @@ class PolarizedNeutronProbe(object):
         trans = auto_shift(plot_shift)
         pp, mm = self.pp, self.mm
         c = coordinated_colors()
-        if hasattr(pp, 'R'):
+        if hasattr(pp, 'R') and hasattr(mm, 'R') and pp.R is not None and mm.R is not None:
             Q, SA, dSA = spin_asymmetry(pp.Q, pp.R, pp.dR, mm.Q, mm.R, mm.dR)
             if dSA is not None:
                 pylab.errorbar(Q, SA, yerr=dSA, xerr=pp.dQ, fmt='.', capsize=0,

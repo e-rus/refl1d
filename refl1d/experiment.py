@@ -1,3 +1,4 @@
+#pylint: disable=invalid-name
 # This program is in the public domain
 # Author: Paul Kienzle
 """
@@ -11,6 +12,7 @@ from __future__ import division, print_function
 from math import pi, log10, floor
 import os
 import traceback
+import json
 
 import numpy
 from bumps import parameter
@@ -20,6 +22,7 @@ from .reflectivity import magnetic_amplitude as reflmag
 #print("Using pure python reflectivity calculator")
 #from .abeles import refl as reflamp
 from . import material, profile
+from . import __version__
 
 def plot_sample(sample, instrument=None, roughness_limit=0):
     """
@@ -204,6 +207,11 @@ class ExperimentBase(object):
         self.save_profile(basename)
         #self.save_staj(basename)
         self.save_refl(basename)
+        self.save_json(basename)
+
+    def save_json(self, basename):
+        """ Save the experiment as a json file """
+        raise NotImplementedError()
 
     def save_profile(self, basename):
         if self.ismagnetic:
@@ -524,6 +532,16 @@ class Experiment(ExperimentBase):
             print("==== could not save staj file ====")
             traceback.print_exc()
 
+    def save_json(self, basename):
+        """ Save the experiment as a json file """
+        json_file = basename + "-expt.json"
+        with open(json_file, 'w') as fid:
+            _expt_dict = dict(refl1d=__version__,
+                              type=type(self).__name__,
+                              probe=self.probe.to_dict(),
+                              sample=self.sample.to_dict())
+            data = json.dumps(_expt_dict)
+            fid.write(data)
 
     def plot_profile(self, plot_shift=None):
         import pylab

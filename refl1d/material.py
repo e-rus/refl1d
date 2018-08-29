@@ -44,7 +44,9 @@ __all__ = ['Material', 'Mixture', 'SLD', 'Vacuum', 'Scatterer', 'ProbeCache']
 import numpy
 from numpy import inf, NaN
 import periodictable
+
 from bumps.parameter import Parameter as Par
+
 
 class Scatterer(object):
     """

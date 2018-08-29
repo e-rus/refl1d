@@ -4,6 +4,30 @@ Change History
 
 Note: updated docs now found at `<http://refl1d.readthedocs.org>`_
 
+2018-06-18 v0.8.5
+=================
+* fix for plotting spin asymmetry when data is not present (model-only)
+* added requirements to setup.py so that `pip install refl1d` suffices
+
+2018-06-14 v0.8.4
+=================
+* full support for python 3 in GUI
+* allow :code:`--pars=parfile` with extra or missing parameters
+
+2018-06-08 v0.8.3
+=================
+* fix saved magnetic profiles
+
+2018-05-18 v0.8.2
+=================
+* include new entry points: run program by typing :code:`refl1d` at prompt
+
+2018-05-17 v0.8.1
+=================
+* allow alternate column order, such as :code:`load4(..., columns="Q dQ R dR")`
+* include resolution effects in Fresnel reflectivity normalization
+* allow magnetic profile to be saved
+
 2017-12-01 v0.8
 ===============
 
