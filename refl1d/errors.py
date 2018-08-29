@@ -155,9 +155,11 @@ def calc_errors(problem, points):
             slabs_i = [L.thickness.value for L in m.sample[1:-1]]
             slabs[name].append(np.array(slabs_i))
             if m.ismagnetic:
-                zpros[name].append(m.magnetic_profile())
+                z, rho, irho, rhoM, thetaM = m.magnetic_step_profile()
+                zpros[name].append((z+0, rho+0, irho+0, rhoM+0, thetaM+0))
             else:
-                zpros[name].append(m.smooth_profile())
+                z, rho, irho = m.smooth_profile()
+                zpros[name].append((z+0, rho+0, irho+0))
 
     for pvec in points:
         problem.setp(pvec)
