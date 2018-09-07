@@ -130,12 +130,12 @@ def calc_errors(problem, points):
     else:
         models = [problem.fitness]
 
-##    experiments = []
-##    for m in models:
-##        if hasattr(m, 'parts'):
-##            experiments.extend(m.parts)
-##        else:
-##            experiments.append(m)
+    experiments = []
+    for m in models:
+        if hasattr(m, 'parts'):
+            experiments.extend(m.parts)
+        else:
+            experiments.append(m)
 ##
 ##    def residQ(m):
 ##        if m.probe.polarized:
@@ -145,10 +145,10 @@ def calc_errors(problem, points):
 ##    Q = dict((m, residQ(m)) for m in experiments)
 
     
-    refls,resds,zpros,slabs=[dict([(m.name,[]) for m in models]) for i in range(4)] 
+    refls,resds,zpros,slabs=[dict([(m.name,[]) for m in experiments]) for i in range(4)] 
     def record_point():
         problem.chisq() # Force reflectivity recalculation
-        for m in models:
+        for m in experiments:
             name = m.name
             refls[name].append(m.reflectivity())
             resds[name].append(m.residuals())
